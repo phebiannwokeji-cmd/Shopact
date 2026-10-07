@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  STAFF
+}
+
+enum AlertType {
+  AGING_DEBT
+  LOW_STOCK
+  LARGE_EXPENSE
+}
+
+enum MessageStatus {
+  PARSED
+  UNRECOGNIZED
+  ERROR
+}
+
+enum DebtStatus {
+  OPEN
+  PAID
+}
+
+model Business {
+  id                        String            @id @default(cuid())
+  name                      String
+  ownerPhone                String            @unique
+  lowStockThresholdUnits    Int               @default(10)
+  largeExpenseThresholdKobo Int               @default(5000000)
+  lastActivityAt            DateTime          @default(now())
+  suspendedAt               DateTime?
+  createdAt                 DateTime          @default(now())
+  users                     User[]
+  customers                 Customer[]
+  products                  Product[]
+  sales                     Sale[]
+  purchases                 Purchase[]
+  expenses                  Expense[]
+  debts                     Debt[]
+  alerts                    Alert[]
+  auditLogs                 AuditLog[]
+  messages                  WhatsAppMessage[]
+}
+
+model User {
+  id          String     @id @default(cuid())
+  businessId  String
+  business    Business   @relation(fields: [businessId], references: [id])
+  phone       String     @unique
+  name        String
+  role        Role
+  pinHash     String?
+  createdAt   DateTime   @default(now())
+  sales       Sale[]
+  purchases   Purchase[]
+  expenses    Expense[]
+  auditLogs   AuditLog[]
+
+  @@index([businessId])
+}
+
+model Customer {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  name       String
+  phone      String?
+  createdAt  DateTime @default(now())
+  debts      Debt[]
+
+  @@index([businessId, name])
+}
+
+model Product {
+  id         String     @id @default(cuid())
+  businessId String
+  business   Business   @relation(fields: [businessId], references: [id])
+  name       String
+  quantity   Int        @default(0)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  sales      Sale[]
+  purchases  Purchase[]
+
+  @@unique([businessId, name])
+}
+
+model Sale {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id])
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  quantity     Int
+  totalKobo    Int
+  recordedById String
+  recordedBy   User     @relation(fields: [recordedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([businessId, createdAt])
+}
+
+model Purchase {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id])
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  quantity     Int
+  costKobo     Int
+  recordedById String
+  recordedBy   User     @relation(fields: [recordedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([businessId, createdAt])
+}
+
+model Debt {
+  id         String     @id @default(cuid())
+  businessId String
+  business   Business   @relation(fields: [businessId], references: [id])
+  customerId String
+  customer   Customer   @relation(fields: [customerId], references: [id])
+  amountKobo Int
+  status     DebtStatus @default(OPEN)
+  createdAt  DateTime   @default(now())
+  paidAt     DateTime?
+
+  @@index([businessId, status, createdAt])
+}
+
+model Expense {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id])
+  amountKobo   Int
+  note         String?
+  recordedById String
+  recordedBy   User     @relation(fields: [recordedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([businessId, createdAt])
+}
+
+model Alert {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id])
+  type       AlertType
+  refId      String
+  message    String
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  @@index([businessId, resolvedAt])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  entityType  String
+  entityId    String
+  field       String
+  oldValue    String
+  newValue    String
+  changedById String
+  changedBy   User     @relation(fields: [changedById], references: [id])
+  changedAt   DateTime @default(now())
+
+  @@index([businessId, entityType, entityId])
+}
+
+model WhatsAppMessage {
+  id            String        @id @default(cuid())
+  businessId    String?
+  business      Business?     @relation(fields: [businessId], references: [id])
+  fromPhone     String
+  rawText       String
+  parsedCommand String?
+  status        MessageStatus
+  createdAt     DateTime      @default(now())
+
+  @@index([fromPhone, createdAt])
+}
